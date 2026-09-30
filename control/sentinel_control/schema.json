@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-sidecar/schema/sentinel.json",
+  "title": "sentinel-sidecar configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "upstream"
+  ],
+  "properties": {
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 600000
+        },
+        "connect_timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000
+        }
+      }
+    },
+    "listen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "health_path": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9._~/-]*$"
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "cert": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "metrics_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "learn",
+        "monitor",
+        "enforce"
+      ]
+    },
+    "profile": {
+      "enum": [
+        "lite",
+        "full"
+      ]
+    },
+    "defaults": {
+      "$ref": "#/$defs/policy"
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/policy"
+          },
+          {
+            "type": "object",
+            "required": [
+              "match"
+            ],
+            "properties": {
+              "match": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "path_prefix": {
+                    "type": "string",
+                    "pattern": "^/"
+                  },
+                  "path_exact": {
+                    "type": "string",
+                    "pattern": "^/"
+                  },
+                  "methods": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "GET",
+                        "HEAD",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                      ]
+                    }
+                  }
+                }
+              },
+              "bypass": {
+                "type": "boolean"
+              },
+              "inspect": {
+                "type": "boolean"
+              },
+              "llm_endpoint": {
+                "type": "boolean"
+              },
+              "rate_limit": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "per_ip": {
+                    "$ref": "#/$defs/rate"
+                  },
+                  "per_account": {
+                    "$ref": "#/$defs/rate"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "unevaluatedProperties": false
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client_ip_from": {
+          "enum": [
+            "remote_addr",
+            "x-forwarded-for",
+            "cf-connecting-ip"
+          ]
+        },
+        "trusted_proxies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "account_from": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 1,
+          "properties": {
+            "jwt_claim": {
+              "type": "string",
+              "minLength": 1
+            },
+            "header": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "lists": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "response_inspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "action": {
+          "enum": [
+            "mask",
+            "log"
+          ]
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "body_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "analyst": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "llm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "url",
+            "model"
+          ],
+          "properties": {
+            "provider": {
+              "enum": [
+                "ollama",
+                "openai-compatible"
+              ]
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "auto_actions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "denylist": {
+              "type": "boolean"
+            },
+            "threshold_nudge": {
+              "type": "boolean"
+            },
+            "rules": {
+              "enum": [
+                "propose",
+                "apply",
+                "off"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metrics": {
+          "enum": [
+            "prometheus",
+            "off"
+          ]
+        },
+        "logs": {
+          "enum": [
+            "json",
+            "text"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rate": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*/(s|m|h)$"
+    },
+    "failure": {
+      "enum": [
+        "open",
+        "closed"
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "on_engine_error": {
+          "$ref": "#/$defs/failure"
+        },
+        "on_timeout": {
+          "$ref": "#/$defs/failure"
+        },
+        "max_inspect_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10485760
+        },
+        "crs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paranoia": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            },
+            "mode": {
+              "enum": [
+                "score",
+                "block"
+              ]
+            }
+          }
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "log": {
+              "$ref": "#/$defs/unit"
+            },
+            "challenge": {
+              "$ref": "#/$defs/unit"
+            },
+            "block": {
+              "$ref": "#/$defs/unit"
+            }
+          }
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "m1": {
+              "$ref": "#/$defs/weight"
+            },
+            "m2": {
+              "$ref": "#/$defs/weight"
+            },
+            "m3": {
+              "$ref": "#/$defs/weight"
+            },
+            "m4": {
+              "$ref": "#/$defs/weight"
+            },
+            "crs": {
+              "$ref": "#/$defs/weight"
+            }
+          }
+        }
+      }
+    },
+    "unit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

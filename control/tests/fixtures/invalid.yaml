@@ -1,0 +1,13 @@
+upstream:
+  url: ftp://app
+mode: panic
+listen:
+  port: 70000
+  tls: { enabled: true }
+defaults:
+  thresholds: { log: 0.9, challenge: 0.5, block: 0.8 }
+routes:
+  - match: { methods: [GET] }
+lists:
+  deny: [not-an-ip]
+surprise: true
