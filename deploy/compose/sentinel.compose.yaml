@@ -1,0 +1,114 @@
+# sentinel-sidecar compose fragment.
+#
+# Add it to an existing project's compose file:
+#
+#   include:
+#     - path: /path/to/sentinel-sidecar/deploy/compose/sentinel.compose.yaml
+#       project_directory: .
+#
+# With project_directory set, ./sentinel.yaml resolves next to the adopting
+# compose file. Then stop publishing the app's own ports so the sidecar is the
+# only way in. Variables:
+#   SENTINEL_CONFIG         path to sentinel.yaml    (default ./sentinel.yaml)
+#   SENTINEL_PUBLIC_PORT    host port to publish      (default 8080)
+#   SENTINEL_METRICS_ADDR   host bind for metrics     (default 127.0.0.1:9902)
+#   SENTINEL_CONTROL_IMAGE  control image             (default sentinel-sidecar/control:dev)
+#   SENTINEL_GATEWAY_IMAGE  gateway image             (default sentinel-sidecar/gateway:dev)
+#   SENTINEL_ENGINE_IMAGE   engine image              (default sentinel-sidecar/engine:dev)
+#
+# Metrics bind to loopback only. In production point Prometheus at the containers
+# over the compose network: sentinel-gateway:9902/metrics and
+# sentinel-engine:9001/metrics.
+
+services:
+  sentinel-config:
+    # One-shot: validates sentinel.yaml and renders the gateway config and the
+    # engine config. An invalid config exits non-zero; nothing else starts.
+    image: ${SENTINEL_CONTROL_IMAGE:-sentinel-sidecar/control:dev}
+    command: ["render", "/etc/sentinel/sentinel.yaml", "--out", "/rendered/envoy.yaml", "--engine-out", "/rendered/engine.json"]
+    volumes:
+      - ${SENTINEL_CONFIG:-./sentinel.yaml}:/etc/sentinel/sentinel.yaml:ro
+      - sentinel-rendered:/rendered
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+  sentinel-redis:
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    user: "999:999"
+    read_only: true
+    tmpfs: [/data]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  sentinel-engine:
+    image: ${SENTINEL_ENGINE_IMAGE:-sentinel-sidecar/engine:dev}
+    environment:
+      SENTINEL_ENGINE_CONFIG: /rendered/engine.json
+      SENTINEL_REDIS_URL: redis://sentinel-redis:6379/0
+      SENTINEL_CHALLENGE_SECRET: ${SENTINEL_CHALLENGE_SECRET:-}
+      SENTINEL_M2_RATE_MAX: ${SENTINEL_M2_RATE_MAX:-60}
+      SENTINEL_M2_FANOUT_MAX: ${SENTINEL_M2_FANOUT_MAX:-40}
+    volumes:
+      - sentinel-rendered:/rendered:ro
+    depends_on:
+      sentinel-config:
+        condition: service_completed_successfully
+      sentinel-redis:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  sentinel-analyst:
+    # Out-of-band: consumes the event stream, correlates campaigns, and (when
+    # analyst.enabled + analyst.llm are configured) runs M5 LLM triage. Never on
+    # the request path. Metrics on :9200 (internal only).
+    image: ${SENTINEL_ANALYST_IMAGE:-sentinel-sidecar/analyst:dev}
+    environment:
+      SENTINEL_ENGINE_CONFIG: /rendered/engine.json
+      SENTINEL_REDIS_URL: redis://sentinel-redis:6379/0
+    volumes:
+      - sentinel-rendered:/rendered:ro
+    depends_on:
+      sentinel-config:
+        condition: service_completed_successfully
+      sentinel-redis:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  sentinel-gateway:
+    image: ${SENTINEL_GATEWAY_IMAGE:-sentinel-sidecar/gateway:dev}
+    command: ["envoy", "-c", "/rendered/envoy.yaml", "--log-level", "warn"]
+    user: "101:101"
+    ports:
+      - "${SENTINEL_PUBLIC_PORT:-8080}:8080"
+      - "${SENTINEL_METRICS_ADDR:-127.0.0.1:9902}:9902"
+    volumes:
+      - sentinel-rendered:/rendered:ro
+    depends_on:
+      sentinel-config:
+        condition: service_completed_successfully
+      sentinel-engine:
+        condition: service_started
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+volumes:
+  sentinel-rendered:

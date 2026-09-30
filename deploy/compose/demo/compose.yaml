@@ -1,0 +1,25 @@
+# Demo: OWASP Juice Shop protected by sentinel-sidecar.
+# Juice Shop publishes no ports; the only way in is the sidecar on :8080.
+# An Ollama service provides the M5 analyst LLM (CPU); it reuses the existing
+# model volume on this host so qwen2.5:3b is already present.
+
+name: sentinel-demo
+
+include:
+  - path: ../sentinel.compose.yaml
+    project_directory: .
+
+services:
+  app:
+    image: bkimminich/juice-shop:v17.3.0@sha256:123acb31ed8bb05ebb06934a29be83d4e11a46cae937b9ed2bf2bda29d98130a
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - cve_trove_ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  cve_trove_ollama_data:
+    external: true

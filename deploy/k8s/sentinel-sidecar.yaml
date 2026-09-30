@@ -1,0 +1,70 @@
+# Example: an app protected by sentinel-sidecar as pod-local sidecars.
+# The same containers as the compose fragment run beside the app; only the
+# gateway is exposed by the Service. An init container renders the config from a
+# ConfigMap into a shared volume, exactly as sentinel-config does in compose.
+# This is a representative example, not a production Helm chart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sentinel-config
+data:
+  sentinel.yaml: |
+    upstream: { url: "http://127.0.0.1:3000" }
+    mode: enforce
+    profile: lite
+    defaults: { crs: { mode: score } }
+    response_inspection: { enabled: true, action: mask }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: my-app } }
+  template:
+    metadata: { labels: { app: my-app } }
+    spec:
+      initContainers:
+        - name: sentinel-config
+          image: sentinel-sidecar/control:dev
+          args: ["render", "/etc/sentinel/sentinel.yaml", "--out", "/rendered/envoy.yaml", "--engine-out", "/rendered/engine.json"]
+          volumeMounts:
+            - { name: config, mountPath: /etc/sentinel }
+            - { name: rendered, mountPath: /rendered }
+      containers:
+        - name: app                      # the protected app, listening on loopback only
+          image: my-app:latest
+          ports: [{ containerPort: 3000 }]
+        - name: sentinel-gateway
+          image: sentinel-sidecar/gateway:dev
+          args: ["envoy", "-c", "/rendered/envoy.yaml", "--log-level", "warn"]
+          ports: [{ containerPort: 8080 }]
+          securityContext: { runAsUser: 101, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false }
+          volumeMounts: [{ name: rendered, mountPath: /rendered, readOnly: true }]
+        - name: sentinel-engine
+          image: sentinel-sidecar/engine:dev
+          env:
+            - { name: SENTINEL_ENGINE_CONFIG, value: /rendered/engine.json }
+            - { name: SENTINEL_REDIS_URL, value: "redis://127.0.0.1:6379/0" }
+          volumeMounts: [{ name: rendered, mountPath: /rendered, readOnly: true }]
+        - name: sentinel-analyst
+          image: sentinel-sidecar/analyst:dev
+          env:
+            - { name: SENTINEL_ENGINE_CONFIG, value: /rendered/engine.json }
+            - { name: SENTINEL_REDIS_URL, value: "redis://127.0.0.1:6379/0" }
+          volumeMounts: [{ name: rendered, mountPath: /rendered, readOnly: true }]
+        - name: sentinel-redis
+          image: redis:7-alpine
+          args: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+      volumes:
+        - { name: config, configMap: { name: sentinel-config } }
+        - { name: rendered, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+spec:
+  selector: { app: my-app }
+  ports: [{ port: 443, targetPort: 8080 }]   # only the sidecar is exposed

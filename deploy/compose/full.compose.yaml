@@ -1,0 +1,21 @@
+# Full profile overlay: adds an Ollama service so the analyst's M5 LLM triage is
+# available. Use it alongside the base fragment, and set analyst.enabled + analyst.llm
+# in your sentinel.yaml (url: http://ollama:11434). Lite profile (the base fragment
+# alone) needs none of this and runs CPU-only with the correlator but no M5.
+#
+#   include:
+#     - path: /path/to/sentinel-sidecar/deploy/compose/sentinel.compose.yaml
+#     - path: /path/to/sentinel-sidecar/deploy/compose/full.compose.yaml
+#
+# Provide the model once: `docker exec <ollama> ollama pull qwen2.5:3b`.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - sentinel-ollama:/root/.ollama
+    # For GPU (the intended full profile), uncomment:
+    # deploy: { resources: { reservations: { devices: [{ capabilities: [gpu] }] } } }
+    restart: unless-stopped
+
+volumes:
+  sentinel-ollama:

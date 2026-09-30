@@ -1,0 +1,23 @@
+upstream:
+  url: http://app:3000
+
+mode: monitor
+profile: lite
+
+routes:
+  - match: { path_prefix: /rest/user/login, methods: [POST] }
+    on_engine_error: closed
+    rate_limit: { per_ip: 10/m }
+  - match: { path_prefix: /rest/products/search, methods: [GET] }
+    llm_endpoint: true
+  - match: { path_prefix: /assets }
+    inspect: false
+
+response_inspection:
+  enabled: true
+  action: mask
+
+analyst:
+  enabled: true
+  llm: { provider: ollama, url: http://ollama:11434, model: qwen2.5:3b }
+  auto_actions: { denylist: true, threshold_nudge: false, rules: apply }
