@@ -231,7 +231,7 @@ One `include:`-able compose fragment ships these, so an adopting service adds ab
 
 Container hardening: non-root, read-only rootfs, dropped capabilities, no admin port on the public interface, and pinned image digests.
 
-Reference host (tri): the RTX 3060 with 12 GB runs M5 at Q4 with room to spare, and inline models run on CPU. Given tri's history of power cuts under sustained load, cap the GPU power limit (`nvidia-smi -pl`) and the analyst's concurrency during load tests.
+Reference sizing: a 12 GB consumer GPU runs M5 at Q4 with room to spare, and inline models run on CPU. For sustained load tests, cap the GPU power limit (`nvidia-smi -pl`) and the analyst's concurrency.
 
 ## 9. Training data and evaluation
 

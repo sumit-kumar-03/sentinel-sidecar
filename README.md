@@ -307,14 +307,15 @@ the results against fixed targets — failing the build if any gate is missed.
 
 | Gate | Target | Current |
 |---|---|---|
-| Attack detection | ≥ 95% | **96.4%** |
-| False positives | ≤ 0.1% | **0.00%** |
+| Attack detection | ≥ 95% | **96.4%** (54 of 56 payloads) |
+| False positives | ≤ 0.1% | **0.00%** (0 of 2,000 benign inputs) |
 | Added latency p95 / p99 | < 25 / 50 ms | **within noise** |
 
 Detection is measured end-to-end through the sidecar in the recommended posture
 (CRS in `score` mode, the engine deciding). See [`eval/report.md`](eval/report.md)
 for the full report, per-family breakdown, and the adversarial replay against real
-scanners.
+scanners. The corpus is small and curated: 56 attack payloads across 5 families and
+2,000 benign values, so treat the figures as a regression gate, not a benchmark.
 
 ## Development
 
@@ -359,4 +360,4 @@ Stated plainly:
 
 ## License
 
-No license is set yet — add one before publishing or accepting contributions.
+MIT. See [LICENSE](LICENSE).

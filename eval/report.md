@@ -1,6 +1,6 @@
 # sentinel-sidecar — Validation Report
 
-Date: 2026-09-29 · Host: tri (192.168.1.6) · Commit: uncommitted (Phases 0–5)
+Date: 2026-09-29 · Scope: Phases 0–5, single-host Docker Compose test stack
 
 Validated the running sidecar across four layers: automated checks, release-gate
 detection/FPR/latency, adversarial real-tool replay, and this report. All numbers
