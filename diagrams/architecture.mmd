@@ -1,0 +1,40 @@
+flowchart LR
+  client([Internet])
+
+  subgraph GW["Envoy gateway"]
+    direction TB
+    tls["TLS / normalize"]
+    crs["OWASP CRS  L0"]
+    l0["rate limit / IP lists"]
+    tls --> crs --> l0
+  end
+
+  subgraph ENG["Inline engine  (ext_authz)"]
+    direction TB
+    feat["feature extraction"]
+    models["M1 payload · M2 behaviour<br/>M3 bot · M4 prompt-injection"]
+    ens["ensemble → verdict"]
+    feat --> models --> ens
+  end
+
+  app["Upstream app"]
+  redis[("Redis")]
+
+  subgraph AN["Out-of-band analyst"]
+    direction TB
+    corr["campaign correlator"]
+    m5["M5 LLM triage"]
+  end
+
+  client --> GW
+  GW -->|ext_authz| ENG
+  ENG -->|allow| app
+  ENG -.->|events| redis
+  redis --> AN
+  AN -->|"finding to TTL denylist"| redis
+  redis -.->|"enforced inline"| ENG
+
+  classDef lane fill:#eef2fb,stroke:#2f66e6,color:#12203a;
+  classDef store fill:#f3eefb,stroke:#8b5cf6,color:#2a1a4a;
+  class GW,ENG,AN lane;
+  class redis store;

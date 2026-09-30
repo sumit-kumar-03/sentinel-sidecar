@@ -1,0 +1,16 @@
+flowchart TD
+  req["Inspected request"] --> l0["L0: CRS score · rate limit · IP lists"]
+  l0 --> feat["Feature extraction (once, shared)"]
+  feat --> models["Score M1 · M2 · M3 · M4"]
+  models --> combine["Weighted noisy-OR + hard signals"]
+  combine --> deny["Dynamic denylist check<br/>(allowlisted clients exempt)"]
+  deny --> mode{"Active mode"}
+  mode -->|monitor / learn| obs["Observe: log intended action, do not block"]
+  mode -->|enforce| verd{"Risk / signal"}
+  verd -->|low| allow["Allow to app"]:::a
+  verd -->|medium| chal["Challenge (JS / PoW)"]:::c
+  verd -->|high| block["Block (403)"]:::b
+
+  classDef a fill:#e7f6ee,stroke:#2f9e5e,color:#123;
+  classDef c fill:#fcf1dd,stroke:#c07d0a,color:#123;
+  classDef b fill:#fbe7e5,stroke:#d1453b,color:#123;

@@ -1,0 +1,24 @@
+sequenceDiagram
+  autonumber
+  participant C as Client
+  participant G as Gateway (Envoy + CRS)
+  participant E as Engine (models)
+  participant R as Redis
+  participant A as Upstream app
+
+  C->>G: HTTP request
+  G->>G: TLS · normalize · CRS score · rate / IP checks
+  G->>E: ext_authz check (method, path, headers, body)
+  E->>E: features → M1..M4 → ensemble + denylist check
+  alt allow / log
+    E-->>G: 200 (allow)
+    G->>A: forward request
+    A-->>C: response (leak-masked if configured)
+  else challenge
+    E-->>G: 429 + JS / proof-of-work page
+    G-->>C: challenge interstitial
+  else block
+    E-->>G: 403
+    G-->>C: blocked
+  end
+  E--)R: emit decision event (async, off the request path)

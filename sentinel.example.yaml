@@ -1,0 +1,63 @@
+# sentinel.yaml — one file per protected service.
+# Only upstream.url is required; every other field shows its default or an example.
+# The whole file is validated at startup; an invalid config fails closed (the
+# gateway never starts). See the Configuration reference in README.md.
+
+upstream:
+  url: http://app:3000          # the protected app, reachable only through the sidecar
+  timeout_ms: 30000
+  connect_timeout_ms: 5000
+
+listen:
+  port: 8080                    # container port; must match the compose port mapping
+  metrics_port: 9902            # internal Prometheus port (loopback only)
+  health_path: /__sentinel/healthz
+  tls: { enabled: false, cert: /certs/tls.crt, key: /certs/tls.key }
+
+mode: monitor                   # monitor | learn | enforce
+profile: lite                   # lite (CPU only) | full (adds the M5 LLM analyst)
+
+defaults:
+  on_engine_error: open         # open (fail open) | closed (fail closed)
+  on_timeout: open              # currently follows on_engine_error
+  max_inspect_bytes: 65536
+  crs: { paranoia: 2, mode: score }   # score (engine decides) | block (CRS blocks directly)
+  thresholds: { log: 0.4, challenge: 0.7, block: 0.85 }   # log <= challenge <= block
+  models: { m1: 0.4, m2: 0.2, m3: 0.2, m4: 0.0, crs: 0.2 } # noisy-OR weights
+
+routes:                         # first match wins; each route inherits defaults
+  - match: { path_prefix: /rest/user/login, methods: [POST] }
+    on_engine_error: closed     # auth endpoint: fail closed if the engine is down
+    rate_limit: { per_ip: 10/m, per_account: 5/m }   # per_account is defined but not yet enforced
+    thresholds: { log: 0.3, challenge: 0.5, block: 0.75 }
+  - match: { path_prefix: /api/chat }
+    llm_endpoint: true          # turns on the M4 prompt-injection model
+  - match: { path_prefix: /assets }
+    inspect: false              # L0/CRS still apply; skip the engine for static assets
+
+identity:
+  client_ip_from: remote_addr   # remote_addr | x-forwarded-for | cf-connecting-ip
+  trusted_proxies: []           # CIDRs of proxies in front (sets trusted-hop count)
+  account_from: { jwt_claim: sub }
+
+lists:
+  allow: []                     # CIDRs never blocked (exempt from deny list and denylist)
+  deny: []                      # CIDRs blocked at L0
+
+response_inspection:
+  enabled: false                # scan upstream responses for leaks
+  action: log                   # mask (replace body + tag x-sentinel-leak) | log
+
+redaction:
+  headers: [authorization, cookie, set-cookie, x-api-key]
+  body_fields: [password]       # stripped before an event or the M5 prompt sees them
+
+analyst:
+  enabled: false                # run M5 LLM triage (needs analyst.llm); correlator runs regardless
+  llm: { provider: ollama, url: http://ollama:11434, model: qwen2.5:3b }
+  auto_actions:
+    denylist: true              # allow the feedback loop to write denylist entries
+    threshold_nudge: false      # defined; not yet implemented
+    rules: propose              # propose (record for review) | apply (act) | off
+
+telemetry: { metrics: prometheus, logs: json }

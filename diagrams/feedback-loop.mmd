@@ -1,0 +1,10 @@
+flowchart LR
+  eng["Inline engine"] -.->|events| stream[("Redis event stream")]
+  stream --> an["Analyst<br/>correlator + M5"]
+  an -->|"finding: M5 verdict<br/>or slow-scan campaign"| deny[("Dynamic denylist<br/>escalating TTL · audited")]
+  deny -.->|"enforced inline, then expires"| eng
+  allowlist["Allowlisted clients"] -. never denied .-> deny
+  admin["Admin API<br/>list · lift · review"] --- deny
+
+  classDef store fill:#f3eefb,stroke:#8b5cf6,color:#2a1a4a;
+  class stream,deny store;

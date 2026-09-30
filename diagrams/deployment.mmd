@@ -1,0 +1,18 @@
+flowchart TD
+  internet([Internet]) -->|":443 / :8080"| gw
+
+  subgraph UNIT["Deployment unit — compose project or k8s pod"]
+    direction TB
+    cfg["sentinel-config<br/>renders envoy.yaml + engine.json"] --> vol[("shared rendered volume")]
+    vol --> gw["sentinel-gateway (Envoy)"]
+    vol --> eng["sentinel-engine"]
+    vol --> an["sentinel-analyst"]
+    gw -->|ext_authz| eng
+    gw --> app["app — no published ports"]
+    eng --> redis[("sentinel-redis")]
+    an --> redis
+    an -.->|full profile only| ollama["ollama (M5 LLM)"]
+  end
+
+  classDef store fill:#f3eefb,stroke:#8b5cf6,color:#2a1a4a;
+  class redis,vol store;
