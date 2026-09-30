@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+gateway/wasm/*.wasm
+engine/models/*.onnx
+eval/out/
